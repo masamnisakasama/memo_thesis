@@ -28,13 +28,13 @@ Query（探したいもの） と Document（候補） を 別々にモデルへ
 それぞれ 固定長ベクトルに変換し、2つのベクトルの近さ（主にcosine類似度）で「関連度っぽさ」を測る。
 
 ```Dual Tower
-           ┌───────────────┐
-Query ---->│ Encoder (Tower) │----> q_vec (ベクトル)
-           └───────────────┘
+           
+Query ----> Encoder (Tower)----> q_vec (ベクトル)
+           
 
-           ┌───────────────┐
-Doc  ----->│ Encoder (Tower) │----> d_vec (ベクトル)
-           └───────────────┘
+           
+Doc  ----->Encoder (Tower)----> d_vec (ベクトル)
+           
 
 score = cosine(q_vec, d_vec)
 ```
@@ -163,9 +163,15 @@ s(q,d)：類似度スコア（similarity）
 qと𝑑の近さを数値化したもの。大きいほど似ている。
 今回はコサイン類似度を用いている。
 <img width="419" height="80" alt="Screenshot 2026-01-25 at 12 24 28" src="https://github.com/user-attachments/assets/165a1cec-4efd-438c-b1c5-df0d553decf4" />
+
 L2正規化している場合、コサイン類似度は [−1,1] に収まる。
 
 τ：温度
 ・τが小さい → softmaxが尖る → 「少しの差でも強く勝敗がつく」＝分離が強くなるが不安定にもなりやすい
 ・𝜏が大きい → softmaxがなだらか → 学習は安定するが分離が弱くなりやすい
+<br><br>
 
+# 6 公開例
+1. マルチモーダルRAGのE2E例（PDF→画像化→埋め込み→検索）。公式（QwenLM）に存在。 [マルチモーダルRAG例1](https://github.com/QwenLM/Qwen3-VL-Embedding/blob/main/examples/Qwen3VL_Multimodal_RAG.ipynb)
+2. Holisticon社、OSSのマルチモーダル検索demo[マルチモーダルRAG例2](https://github.com/holisticon/multimodal-rag-demo)
+3. Qwen3-VL-Embeddingを用いたローカル画像検索アプリ[マルチモーダルRAG例3](https://zenn.dev/robustonian/articles/qwen3-vl-embedding_search)
