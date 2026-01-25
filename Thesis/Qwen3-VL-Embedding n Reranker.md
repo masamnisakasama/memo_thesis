@@ -99,7 +99,7 @@ Transformerは層が積み重なっていて、層ごとに「各トークンの
 # 3. Rerankerは何をしているのか
 Single-Tower / Cross-encoderで動く。
 Query と Doc を 一緒にモデルへ入れて、cross-attentionで「Queryの各要素」と「Docの各要素」を突き合わせる。
-**“このペアは関連する？”**を精密に判定する。
+**このペアは関連する？**を精密に判定する。
 
 ```
 [Instruction][Query][Doc] ---> Single Encoder (Cross-Attention) ---> score
@@ -109,8 +109,10 @@ Rerankerでは関連度スコアを 特別トークンyes/noの生成確率で�
 Transformerの注意機構（attention）は、ざっくりこう
 ![118F7B21-4504-4E6E-8017-AF453DC247C5_4_5005_c](https://github.com/user-attachments/assets/cfc7163b-3732-46f4-8098-326afac3eb2a)
 
- ・Q（Query）：どこを見たいか
+・Q（Query）：どこを見たいか
+
 ・K（Key）：各トークンの「見出し」
+
 ・V（Value）：各トークンの「中身」
 
 「Query側のトークンが、Doc側のトークンを見に行く」のが cross-attention のコア
@@ -151,7 +153,7 @@ InfoNCE（Information Noise-Contrastive Estimation）は、1つのクエリ q �
 典型形は以下の通り：
 <img width="544" height="72" alt="Screenshot 2026-01-25 at 12 17 25" src="https://github.com/user-attachments/assets/2e96b8f2-c70e-4a4e-a95b-d8895180087c" />
 
-**「正例を、負例集合の中で当てる」**という softmax分類 をやっていて、その **負の対数尤度（クロスエントロピー）**を損失関数としている
+正例を、負例集合の中で当てる」という softmax分類 をやっていて、その 負の対数尤度（クロスエントロピー）を損失関数としている
 
 ここで各記号の意味は以下の通り
 
