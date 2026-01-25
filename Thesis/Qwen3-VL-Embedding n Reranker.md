@@ -1,4 +1,4 @@
-# 1. 全体像
+# 1. Qwen3-VL-EmbeddingとRerankerの全体像
 
 結論：高速に候補を集める“Embedding”と、精密に並べ替える“Reranker”の2段構え。
 テキスト/画像/文書画像/動画を同一の表現空間で扱う。
@@ -64,7 +64,7 @@ l=L   [ ● ]   [ ● ]   [ ● ]        ...     [ ● ]    [ ⭐︎ ]
 Qwen3-VL のバックボーンが **causal attention（自己回帰マスク）**を用いているから。
 自己回帰モデルでは、位置tの表現はそれ以前の全トークンを参照して更新されるため、最後のトークンは、前にある全てを見ている。
 
-## 2.3 「隠れ状態」って何ですか？
+## 2.4 そもそも「隠れ状態」って何ですか？
 直感的には、**各トークンの“理解メモ**
 
 例として
@@ -173,7 +173,46 @@ L2正規化している場合、コサイン類似度は [−1,1] に収まる�
 ・𝜏が大きい → softmaxがなだらか → 学習は安定するが分離が弱くなりやすい
 <br><br>
 
-# 6 公開例
-1. マルチモーダルRAGのE2E例（PDF→画像化→埋め込み→検索）。公式（QwenLM）に存在。 [マルチモーダルRAG例1](https://github.com/QwenLM/Qwen3-VL-Embedding/blob/main/examples/Qwen3VL_Multimodal_RAG.ipynb)
-2. Holisticon社、OSSのマルチモーダル検索demo[マルチモーダルRAG例2](https://github.com/holisticon/multimodal-rag-demo)
-3. Qwen3-VL-Embeddingを用いたローカル画像検索アプリ[マルチモーダルRAG例3](https://zenn.dev/robustonian/articles/qwen3-vl-embedding_search)
+# 6. 使用例
+## 6.1 公開例
+1. マルチモーダルRAGのE2E例（PDF→画像化→埋め込み→検索）。公式（QwenLM）に存在。 [公開例A](https://github.com/QwenLM/Qwen3-VL-Embedding/blob/main/examples/Qwen3VL_Multimodal_RAG.ipynb)
+2. Holisticon社、OSSのマルチモーダル検索demo[公開例B](https://github.com/holisticon/multimodal-rag-demo)
+3. Qwen3-VL-Embeddingを用いたローカル画像検索アプリ[公開例C](https://zenn.dev/robustonian/articles/qwen3-vl-embedding_search)
+
+## 6.2 公開例Bの設計
+・ingest → index → query →answerの順で処理が進む
+
+### アーキテクチャ（実装構造）
+Ingest:
+・PDFは「ページ画像」+「抽出テキスト」の両方を取り込むので、画像でもテキストでも検索可能
+・テキストはチャンク化（デフォルト chunk=1200 / overlap=200）
+・PDFレンダリングのDPIもパラメータ化（デフォルト pdf-dpi=75）
+
+Index
+・画像（ページ）・テキスト（チャンク）の両方を埋め込み、UI上で“ページ画像”と“テキスト断片”をソースとして出している
+
+Query
+・テキストor画像or両方で検索できる
+・top_k / rerank_kの概念があり、rerankerのON/OFFも切替可能
+
+Answer
+・ローカル生成（transformers） or OpenAI互換API（LM Studio等） or リモートOpenAIなどを切り替え可能
+
+## 6.3 AI-OCRに業務に適用する際の機能要件と被機能要件について
+
+機能要件
+・PDF取り込み（ページ分割）
+・画像クエリ（スクショから検索）
+・テキストクエリ検索
+・結果のページ提示
+・削除（忘れさせる/再インデックス）
+・自動要約
+・FAQ生成
+・監査ログ
+・reranker切替
+
+非機能要件
+・レイテンシ：P95（例：検索3秒以内、生成10秒以内）
+・コスト：VRAM制約（2B/8Bどちらを使うか、量子化前提か）
+・セキュリティ：ローカル完結 or クラウド、保存期間、PII取り扱い
+
