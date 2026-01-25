@@ -2,9 +2,10 @@
 CLIPはContrastive Language–Image Pretrainingの略。
 高速に候補を集める **Embedding（Dual-Tower）** を、**画像×テキスト**で成立させた代表格が CLIP。  
 画像とテキストを 同一の表現空間（同じベクトル空間）へ写像し、内積（= cosine類似度）で「一致度」を測る。
-<br>
+<br><br>
 CLIPの計算を体感できるexcelファイル
-[CLIP　損失関数計算.xlsx](https://github.com/user-attachments/files/24844530/CLIP.xlsx)
+[CLIP　損失関数計算.xlsx](https://github.com/user-attachments/files/24847145/CLIP.revised.xlsx)
+
 
 > [!TIP]
 > RAGでの位置づけは基本これ：  
