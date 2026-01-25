@@ -21,8 +21,9 @@
 ```
 
 # 2. Embeddingは何をしているのか
+# 2.1 全体図
 
-すなわち、Dual-Tower / Bi-encoderという、２本の軸を持つモデルで動いている。
+Dual-Tower / Bi-encoderという、２本の軸を持つモデルで動いている。
 Query（探したいもの） と Document（候補） を 別々にモデルへ入れて、
 それぞれ 固定長ベクトルに変換し、2つのベクトルの近さ（主にcosine類似度）で「関連度っぽさ」を測る。
 
@@ -38,7 +39,7 @@ Doc  ----->│ Encoder (Tower) │----> d_vec (ベクトル)
 score = cosine(q_vec, d_vec)
 ```
 
-## 2.1 実際に用いる埋め込みベクトルはどこから取る？
+## 2.2 実際に用いる埋め込みベクトルはどこから取る？
 Embeddingは ベースモデル最終層の[EOS]トークンの隠れ状態を最終表現として取り出している。
 
 各層 𝑙=1..𝐿
@@ -58,7 +59,7 @@ l=3   [ ● ]   [ ● ]   [ ● ]        ...     [ ● ]    [ ● ]
  ...    ...     ...     ...                 ...      ...
 l=L   [ ● ]   [ ● ]   [ ● ]        ...     [ ● ]    [ ⭐︎ ]
 ```
-## 2.2 なぜ最終層の [EOS] トークンの隠れ状態をとるだけで全文・全画像を代表できるのか
+## 2.3 なぜ最終層の [EOS] トークンの隠れ状態をとるだけで全文・全画像を代表できるのか
 
 Qwen3-VL のバックボーンが **causal attention（自己回帰マスク）**を用いているから。
 自己回帰モデルでは、位置tの表現はそれ以前の全トークンを参照して更新されるため、最後のトークンは、前にある全てを見ている。
@@ -71,7 +72,7 @@ Qwen3-VL のバックボーンが **causal attention（自己回帰マスク）*
 私は りんご を 食べた
 ```
 
-をトークン列として入れると、モデルは各位置に対してこんな「内部メモ」を作ります：
+をトークン列として入れると、モデルは各位置に対してこんな「内部メモ」を作る：
 
 「私は」位置の hidden state：主語っぽい・人間っぽい…などの特徴
 「りんご」位置の hidden state：食べ物っぽい・目的語っぽい…などの特徴
@@ -106,9 +107,64 @@ Query と Doc を 一緒にモデルへ入れて、cross-attentionで「Queryの
 Rerankerでは関連度スコアを 特別トークンyes/noの生成確率で表現している。
 
 Transformerの注意機構（attention）は、ざっくりこう
+![118F7B21-4504-4E6E-8017-AF453DC247C5_4_5005_c](https://github.com/user-attachments/assets/cfc7163b-3732-46f4-8098-326afac3eb2a)
 
  ・Q（Query）：どこを見たいか
 ・K（Key）：各トークンの「見出し」
 ・V（Value）：各トークンの「中身」
 
 「Query側のトークンが、Doc側のトークンを見に行く」のが cross-attention のコア
+
+# 4.入力フォーマットについて
+
+Embedding側は instructionをsystem messageとして渡し、デフォルトは “Represent the user’s input.”としている。
+まとめるとこんな感じ
+
+```
+Embedding:
+[Instruction][Query/Doc][PAD]  --->  last hidden states  ---> embedding
+
+Reranker:
+[Instruction][Query][Doc][ASSISTANT] ---> LM head ---> P("yes") 等 ---> score
+```
+
+# 5.学習方法について
+# 5.1　CLIPとの類似性
+CLIPと似たシステムを採用している。損失関数はInfoNCE（コントラスト学習）を用いている。
+ここで、CLIP＝「画像エンコーダ＋テキストエンコーダのモデルと学習枠組み」
+InfoNCE＝「対照学習で使う損失関数」くらいのイメージ。
+CLIPとInfoNSEの違いは２つ
+
+違い1：対象
+・InfoNCEは何にでも使える一般の損失
+・CLIPは「画像とテキストのbi towerモデル」＋「その損失で学習する」という具体的なシステム
+
+違い2：CLIPは 双方向（対称）
+InfoNCEは片方向でも定義できるが、CLIPは基本 画像→テキスト と テキスト→画像の両方を足す構成.
+
+# 5.2 InfoNSEのしていること
+InfoNCE（Information Noise-Contrastive Estimation）は、1つのクエリ q に対して
+・正例：𝑑^+
+・負例：𝑑^-
+の中から **「正例を当てる多クラス分類」**をさせて損失関数を出す。
+
+典型形は以下の通り：
+<img width="544" height="72" alt="Screenshot 2026-01-25 at 12 17 25" src="https://github.com/user-attachments/assets/2e96b8f2-c70e-4a4e-a95b-d8895180087c" />
+**「正例を、負例集合の中で当てる」**という softmax分類 をやっていて、その **負の対数尤度（クロスエントロピー）**を損失関数としている
+
+ここで各記号の意味は以下の通り
+
+q：クエリ（query）。
+例：検索なら「質問文」、CLIPなら「画像 or テキスト」の片方。
+embeddingだと埋め込みベクトルのこと。
+
+s(q,d)：類似度スコア（similarity）
+qと𝑑の近さを数値化したもの。大きいほど似ている。
+今回はコサイン類似度を用いている。
+<img width="419" height="80" alt="Screenshot 2026-01-25 at 12 24 28" src="https://github.com/user-attachments/assets/165a1cec-4efd-438c-b1c5-df0d553decf4" />
+L2正規化している場合、コサイン類似度は [−1,1] に収まる。
+
+τ：温度
+・τが小さい → softmaxが尖る → 「少しの差でも強く勝敗がつく」＝分離が強くなるが不安定にもなりやすい
+・𝜏が大きい → softmaxがなだらか → 学習は安定するが分離が弱くなりやすい
+
