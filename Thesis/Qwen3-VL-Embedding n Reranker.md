@@ -19,7 +19,7 @@
      [最終順位 / 最終割当]
 
 ```
-
+<br>
 # 2. Embeddingは何をしているのか
 # 2.1 全体図
 
@@ -95,7 +95,7 @@ Transformerは層が積み重なっていて、層ごとに「各トークンの
 
 「隠れ状態」は昔のニューラルネット（RNNなど）由来の呼び方。
 モデル内部の状態（外に直接見せる出力ではない）が、そこから最終出力（次トークン予測、分類、埋め込みなど）を作るという意味で “hidden” と呼ぶ。
-
+<br>
 # 3. Rerankerは何をしているのか
 Single-Tower / Cross-encoderで動く。
 Query と Doc を 一緒にモデルへ入れて、cross-attentionで「Queryの各要素」と「Docの各要素」を突き合わせる。
@@ -114,7 +114,7 @@ Transformerの注意機構（attention）は、ざっくりこう
 ・V（Value）：各トークンの「中身」
 
 「Query側のトークンが、Doc側のトークンを見に行く」のが cross-attention のコア
-
+<br>
 # 4.入力フォーマットについて
 
 Embedding側は instructionをsystem messageとして渡し、デフォルトは “Represent the user’s input.”としている。
@@ -127,7 +127,7 @@ Embedding:
 Reranker:
 [Instruction][Query][Doc][ASSISTANT] ---> LM head ---> P("yes") 等 ---> score
 ```
-
+<br>
 # 5.学習方法について
 # 5.1　CLIPとの類似性
 CLIPと似たシステムを採用している。損失関数はInfoNCE（コントラスト学習）を用いている。
@@ -144,12 +144,13 @@ InfoNCEは片方向でも定義できるが、CLIPは基本 画像→テキス�
 
 # 5.2 InfoNSEのしていること
 InfoNCE（Information Noise-Contrastive Estimation）は、1つのクエリ q に対して
-・正例：𝑑^+
-・負例：𝑑^-
+・正例：𝑑<sup>+</sup>
+・負例：𝑑^<sup>-</sup>
 の中から **「正例を当てる多クラス分類」**をさせて損失関数を出す。
 
 典型形は以下の通り：
 <img width="544" height="72" alt="Screenshot 2026-01-25 at 12 17 25" src="https://github.com/user-attachments/assets/2e96b8f2-c70e-4a4e-a95b-d8895180087c" />
+
 **「正例を、負例集合の中で当てる」**という softmax分類 をやっていて、その **負の対数尤度（クロスエントロピー）**を損失関数としている
 
 ここで各記号の意味は以下の通り
