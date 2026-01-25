@@ -2,6 +2,9 @@
 CLIPはContrastive Language–Image Pretrainingの略。
 高速に候補を集める **Embedding（Dual-Tower）** を、**画像×テキスト**で成立させた代表格が CLIP。  
 画像とテキストを 同一の表現空間（同じベクトル空間）へ写像し、内積（= cosine類似度）で「一致度」を測る。
+<br>
+CLIPの計算を体感できるexcelファイル
+[CLIP　損失関数計算.xlsx](https://github.com/user-attachments/files/24844530/CLIP.xlsx)
 
 > [!TIP]
 > RAGでの位置づけは基本これ：  
@@ -19,16 +22,13 @@ CLIPはContrastive Language–Image Pretrainingの略。
   - [2.4 転置×行列積が「類似行列」になる理由](#24-転置行列積が類似行列になる理由)
 - [3. 学習方法（InfoNCE）](#3-学習方法infonce)
   - [3.1 logitsと温度（temperature）](#31-logitsと温度temperature)
-  - [3.2 softmax（画像→テキスト / テキスト→画像）](#32-softmax画像→テキスト--テキスト→画像)
+  - [3.2 softmax](#32-softmax)
   - [3.3 InfoNCE損失（対称CLIP損失）](#33-infonce損失対称clip損失)
-  - [3.4 数値安定化（log-sum-exp）](#34-数値安定化log-sum-exp)
 - [4. 推論（Inference）](#4-推論inference)
-  - [4.1 画像↔テキスト検索（retrieval）](#41-画像↔テキスト検索retrieval)
+  - [4.1 画像とテキストの相互検索](#41-画像とテキストの相互検索)
   - [4.2 ゼロショット分類（zero-shot）](#42-ゼロショット分類zero-shot)
 - [5. 使いどころ（実務の利用例）](#5-使いどころ実務の利用例)
 - [6. Qwen3-VL-Embedding / Reranker との対応関係](#6-qwen3-vl-embedding--reranker-との対応関係)
-- [7. Excelで追うときの“ズレない”配置と計算式](#7-excelで追うときのズレない配置と計算式)
-
 ---
 
 ## 1. CLIPの全体像
@@ -109,21 +109,15 @@ L2正規化をすると「内積 = cosine」にできるので、**意味の近�
 - 検索（ANN）で扱いやすい（内積/cosineは定番）
 - バッチで一括計算しやすい（行列積に落とせる）
 
+
+
+#### L2正規化の後内積計算でcos類似度計算
 <img width="900" height="69" alt="Screenshot 2026-01-25 at 20 38 55" src="https://github.com/user-attachments/assets/9cd91418-1f8a-407c-add2-a749109182a6" />
 <img width="1054" height="175" alt="Screenshot 2026-01-25 at 20 39 09" src="https://github.com/user-attachments/assets/fa787797-e2f6-4f9d-bf2c-4834774a262b" />
 <img width="791" height="110" alt="Screenshot 2026-01-25 at 20 40 04" src="https://github.com/user-attachments/assets/15558937-7f66-403b-b853-794d0232de50" />
 <img width="983" height="141" alt="Screenshot 2026-01-25 at 20 40 18" src="https://github.com/user-attachments/assets/64ba172a-cbae-4cf7-8989-2962c71d8baf" />
-<img width="913" height="124" alt="Screenshot 2026-01-25 at 20 40 30" src="https://github.com/user-attachments/assets/cec2b62e-be22-4f72-8903-b9e9d01089f8" />
-<img width="1251" height="145" alt="Screenshot 2026-01-25 at 20 40 42" src="https://github.com/user-attachments/assets/153ff371-b56c-4b04-9406-16bdae77a148" />
-<img width="1250" height="140" alt="Screenshot 2026-01-25 at 20 40 56" src="https://github.com/user-attachments/assets/3121407f-71e4-4de2-803a-c40f11232d1f" />
-<img width="1206" height="326" alt="Screenshot 2026-01-25 at 20 41 08" src="https://github.com/user-attachments/assets/35fa53d5-ac89-44b7-b9d6-d1a66a11129f" />
-<img width="768" height="120" alt="Screenshot 2026-01-25 at 20 41 20" src="https://github.com/user-attachments/assets/d5bda6e7-7b1a-4baf-aa6f-4b6f2bed7db6" />
-
-#### 数式画像：L2正規化の後内積計算でcos類似度計算
 
 
-
-#### 数式画像：cosineの直感（角度）
 
 ---
 
@@ -145,10 +139,6 @@ S = U × V^T
 - `S[i, j]` が「画像 i と テキスト j の内積（= cosine）」なので  
   **全ペアの一致度が並んだ表 = 類似行列（similarity matrix）**。
 
-> [!TIP]
-> 「転置」は “サンプルを行に置くか列に置くか” の都合です。  
-> サンプルを行（N×d）に置くのが、Excelや説明では一番ズレにくいです。
-
 ---
 
 ## 3. 学習方法（InfoNCE）
@@ -167,7 +157,7 @@ CLIPの学習の狙いはシンプル：
 類似度 `s_ij` をそのままsoftmaxに入れると、学習が極端になったり不安定になったりするため、  
 温度 `τ`（temperature）で割って **logits**（softmaxの入力）にする。
 
-- `z_ij = s_ij / τ`
+<img width="913" height="124" alt="Screenshot 2026-01-25 at 20 40 30" src="https://github.com/user-attachments/assets/cec2b62e-be22-4f72-8903-b9e9d01089f8" />
 
 温度 `τ` の効果（直感）：
 
@@ -175,78 +165,45 @@ CLIPの学習の狙いはシンプル：
 - `τ` が **大きい** → softmaxが **なだらか** → 学習は安定するが分離が弱くなりやすい
 
 > [!NOTE]
-> 実装では `logit_scale = 1/τ` を学習パラメータにする流儀も多いです。
+> 実装では `logit_scale = 1/τ` を学習パラメータにする流儀も多い。
 
 ---
 
-### 3.2 softmax（画像→テキスト / テキスト→画像）
+### 3.2 softmax
 
-CLIPは基本 **双方向（対称）**で学習します。
+CLIPは基本 **双方向（対称）**で学習する。
 
 #### 画像→テキスト（行方向softmax）
 「画像 i を固定したとき、正しいテキストはどれ？」  
 → **行方向**にsoftmax（行の和が1）
+<img width="1251" height="145" alt="Screenshot 2026-01-25 at 20 40 42" src="https://github.com/user-attachments/assets/153ff371-b56c-4b04-9406-16bdae77a148" />
 
-<p align="center">
-  <img src="./assets/clip_math/eq04_softmax_i2t.png" width="980" alt="softmax（画像→テキスト：行方向）： p_ij^(i→t)=exp(z_ij)/Σ_m exp(z_im)">
-</p>
 
 #### テキスト→画像（列方向softmax）
 「テキスト j を固定したとき、正しい画像はどれ？」  
 → **列方向**にsoftmax（列の和が1）
+<img width="1250" height="140" alt="Screenshot 2026-01-25 at 20 40 56" src="https://github.com/user-attachments/assets/3121407f-71e4-4de2-803a-c40f11232d1f" />
 
-> [!IMPORTANT]
-> ここが一番混乱しやすいポイント：  
-> **同じ z_ij（同じ行列）を使うが、分母が違う**ので  
-> “画像→テキストの確率” と “テキスト→画像の確率” は **別物**です。
 
 ---
 
 ### 3.3 InfoNCE損失（対称CLIP損失）
 
-バッチ内では「画像 i とテキスト i が正例」（= 対角が正例）とします。
+バッチ内では「画像 i とテキスト i が正例」（= 対角が正例）である。
+<img width="900" height="69" alt="Screenshot 2026-01-25 at 20 38 55" src="https://github.com/user-attachments/assets/9cd91418-1f8a-407c-add2-a749109182a6" />
 
 - 画像→テキスト：対角 `p_ii^(i→t)` を大きくしたい（正しいテキストを当てたい）
 - テキスト→画像：対角 `p_jj^(t→i)` を大きくしたい（正しい画像を当てたい）
 - 最後に **平均**して対称にする
 
-<p align="center">
-  <img src="./assets/clip_math/eq05_infonce_and_symmetric_clip.png" width="980" alt="InfoNCE損失（画像→テキスト / テキスト→画像）と 対称CLIP損失">
-</p>
-
-#### 正例対応（対角が正例）
-<p align="center">
-  <img src="./assets/clip_math/eq01_positive_pairs.png" width="980" alt="正例対応：(u_i, v_i) が正例ペア (i=1..N)">
-</p>
-
----
-
-### 3.4 数値安定化（log-sum-exp）
-
-`EXP()` は値が大きいと爆発します（Excelだと `#NUM!` になりやすい）。  
-そのため softmax は、ほぼ必ず **最大値を引く**（log-sum-expの定番テク）で安定化します。
-
-- 行方向softmax（画像→テキスト）の場合：  
-  **各行の最大値** `max_i = max_j z_ij` を引く
-
-```text
-z'_ij = z_ij - max_i
-softmax_ij = EXP(z'_ij) / SUM_j EXP(z'_ij)
-```
-
-- 列方向softmax（テキスト→画像）の場合：  
-  **各列の最大値** `max_j = max_i z_ij` を引く
-
-```text
-z'_ij = z_ij - max_j
-softmax_ij = EXP(z'_ij) / SUM_i EXP(z'_ij)
-```
+<img width="1206" height="326" alt="Screenshot 2026-01-25 at 20 41 08" src="https://github.com/user-attachments/assets/35fa53d5-ac89-44b7-b9d6-d1a66a11129f" />
+<img width="768" height="120" alt="Screenshot 2026-01-25 at 20 41 20" src="https://github.com/user-attachments/assets/d5bda6e7-7b1a-4baf-aa6f-4b6f2bed7db6" />
 
 ---
 
 ## 4. 推論（Inference）
 
-### 4.1 画像↔テキスト検索（retrieval）
+### 4.1 画像とテキストの相互検索
 
 学習済みの埋め込みがあれば、検索は単純です。
 
@@ -307,99 +264,8 @@ Reranker（Qwen3-VL-Reranker）: 遅いが精密・ペア照合で順位を詰�
 
 ---
 
-## 7. Excelで追うときの“ズレない”配置と計算式
-
-> [!IMPORTANT]
-> 「内積計算がずれる」原因の多くは  
-> **サンプルを行に置いたのか列に置いたのか**が曖昧なまま `MMULT` していることです。
-
-### 7.1 配置ルール（これだけ守ればズレない）
-- 画像埋め込み `U`：`N×d`（**各行**が画像1枚）
-- テキスト埋め込み `V`：`N×d`（**各行**がテキスト1本）
-- 類似行列 `S`：`N×N`
-
-```text
-S = MMULT( U範囲 , TRANSPOSE(V範囲) )
-```
-
----
-
-### 7.2 温度つきlogits（z_ij）
-```text
-Z = S / τ
-```
-
-- Excelでは `τ` を 1セル（例：`B1`）に置いて参照すると教材っぽくなります  
-  例：`Zセル = Sセル / $B$1`
-
----
-
-### 7.3 softmax（画像→テキスト：行方向）をExcelで「そのまま」書く
-ここは **1行（画像 i 固定）**に注目して計算します。
-
-#### (A) 行の最大値（安定化）
-- 行 i の最大値：`rowMax_i = MAX(Z_i1:Z_iN)`
-
-#### (B) 安定化した指数
-- `expZ'_ij = EXP(Z_ij - rowMax_i)`
-
-#### (C) 行和
-- `rowSum_i = SUM(expZ'_i1:expZ'_iN)`
-
-#### (D) 確率
-- `P_it_ij = expZ'_ij / rowSum_i`
-
-#### (E) loss（対角だけ）
-- `loss_i = -LN(P_it_ii)`
-
-#### (F) 平均
-- `L_i2t = AVERAGE(loss_1:loss_N)`
-
-> [!TIP]
-> “対角だけLNする” のがポイントです。  
-> 画像 i に対して正しいテキストは i なので、`P_it_ii` を最大化したい（= lossを最小化したい）。
-
----
-
-### 7.4 softmax（テキスト→画像：列方向）をExcelで「そのまま」書く
-今度は **1列（テキスト j 固定）**に注目します。
-
-#### (A) 列の最大値（安定化）
-- 列 j の最大値：`colMax_j = MAX(Z_1j:Z_Nj)`
-
-#### (B) 安定化した指数
-- `expZ''_ij = EXP(Z_ij - colMax_j)`
-
-#### (C) 列和
-- `colSum_j = SUM(expZ''_1j:expZ''_Nj)`
-
-#### (D) 確率
-- `P_ti_ij = expZ''_ij / colSum_j`
-
-#### (E) loss（対角だけ）
-- `loss_j = -LN(P_ti_jj)`
-
-#### (F) 平均
-- `L_t2i = AVERAGE(loss_1:loss_N)`
-
----
-
-### 7.5 最終（対称）CLIP損失
-```text
-L = (L_i2t + L_t2i) / 2
-```
-
----
-
-## 付録：数式画像ファイル名（このまま使えるテンプレ）
-READMEと同階層に `assets/clip_math/` を作り、以下の名前で保存すると、そのまま貼れます。
-
-- `assets/clip_math/eq01_positive_pairs.png`
-- `assets/clip_math/eq02_cosine_inner_product.png`
-- `assets/clip_math/eq03_cosine_interpretation.png`
-- `assets/clip_math/eq04_softmax_i2t.png`
-- `assets/clip_math/eq05_infonce_and_symmetric_clip.png`
 
 
 
-[CLIP　損失関数計算.xlsx](https://github.com/user-attachments/files/24844530/CLIP.xlsx)
+
+
