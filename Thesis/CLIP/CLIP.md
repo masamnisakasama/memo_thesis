@@ -29,7 +29,6 @@ CLIPの計算を体感できるexcelファイル
   - [4.1 画像とテキストの相互検索](#41-画像とテキストの相互検索)
   - [4.2 ゼロショット分類（zero-shot）](#42-ゼロショット分類zero-shot)
 - [5. 使いどころ（実務の利用例）](#5-使いどころ実務の利用例)
-- [6. Qwen3-VL-Embedding / Reranker との対応関係](#6-qwen3-vl-embedding--reranker-との対応関係)
 ---
 
 ## 1. CLIPの全体像
@@ -92,7 +91,7 @@ CLIPは最終的に「画像代表ベクトル」「テキスト代表ベクト�
 #### テキスト側（例：Transformer）
 - テキストをトークン列へ
 - Transformerで更新
-- **[EOS]（文末）**や **[CLS]**相当を代表として使うことが多い
+- **[EOS]**（文末）や **[CLS]** 相当を代表として使うことが多い
 
 #### Projection head（同次元化）
 - 画像側・テキスト側それぞれの代表ベクトルを **同じ次元 d** に合わせる（線形変換のことが多い）
@@ -243,27 +242,12 @@ pred = argmax_label ( û_img · v̂_label )
 - [ ] 画像↔テキスト検索（社内画像検索、デザイン資産検索、製品写真検索）
 - [ ] 文書画像の粗い分類（テンプレ/レイアウト分類の入口）
 - [ ] ゼロショット分類（ラベル追加が軽い）
-- [ ] クラスタリング前処理（埋め込み → PCA/UMAP → HDBSCAN 等）
 - [ ] RAGのretrieve（画像・スクショ検索の入口）
 
-> [!NOTE]
-> CLIP単体は「候補回収」が得意。  
-> “厳密にこのページのこの段落が根拠” まで詰めたいなら、Rerankerで2段にするのが自然です。
+
 
 ---
 
-## 6. Qwen3-VL-Embedding / Reranker との対応関係
-
-- **CLIP**：画像×テキストの **Dual-Tower + InfoNCE**（検索の入口に強い）
-- **Qwen3-VL-Embedding**：CLIP的な“検索の入口”を、より一般のマルチモーダルへ拡張した系（思想が近い）
-- **Reranker（Cross-encoder）**：候補K件だけを精密照合して並べ替える（Embeddingが苦手な部分）
-
-```text
-Embedding（CLIP / Qwen3-VL-Embedding）: 速い・広く候補を集める
-Reranker（Qwen3-VL-Reranker）: 遅いが精密・ペア照合で順位を詰める
-```
-
----
 
 
 
