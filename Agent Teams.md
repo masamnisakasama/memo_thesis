@@ -1,39 +1,46 @@
-# Claude Code「Agent Teams」社内向けまとめ（用途・導入・セキュリティ・デメリット）
-前提：PII（個人情報）は外部に出た時点でアウト。WebFetchは「外部から取得するだけならOK」。
+# Claude Code「Agent Teams」について（用途・導入・セキュリティ・デメリット）
 
 ---
 
 ## 0. 「Agent Teams」って何？（1分でわかる説明）
-Agent Teamsは、Claude Code上で “複数の作業セッション（teammates）” を同時に動かし、タスクを分割して並列に進める仕組みです。
+Agent Teamsは、Claude Code上で 複数の作業セッション（teammates） を同時に動かし、タスクを分割して並列に進める仕組みです。
 
-イメージ：
-- lead（リード）が「何をやるか」を整理して teammates に振る
-- teammates が各自で調査・実装・レビュー等を進める
-- lead が成果を統合して、最終成果物にまとめる
+
+実際に商用完全OKのデータを入力データとしてみてOCR実装についてためしてみた様子です。
+<img width="527" height="279" alt="スクリーンショット 2026-02-08 212428" src="https://github.com/user-attachments/assets/ecb9f8be-e320-489a-a542-77f697dd0255" />
+
+各Agentの役割は以下の通り
+```
+・Ops（環境・依存チェック）
+目的：ベンチが“迷いなく確実に走る状態”を作る。失敗したら最短復旧手順を提示する。
+
+・Runner（E2E実行）
+目的：決められた順で run.ps1 を回し、run_idとログを確実に残す。途中停止したら原因特定→再実行まで持っていく。
+
+・Analyst（成果物検証・指標まとめ・gate確認）
+目的：runが「正しく走った」ことを成果物で担保し、数値を読み取り、gate(人間が定めたpassの基準)が意図どおり判定されているか確認する。
+
+・Improver（精度改善分析・実装案・次実験計画）
+目的：Analystの観察を受けて、外部から情報をフェッチし、次に何を試せばよいかを具体的にする。
+
+・Reporter（最終レポート整形：REPORT.md + summary.json）
+目的：チームの結果を、後から見ても再現できる形に整える。読む人（未来のagents/人間）が意思決定できる状態にする。
+```
+
 
 向いている作業：
 - 仕様の穴埋め、設計案の比較、APIのフロント/バック協調、リファクタや移行計画など「並列化できる知的作業」
 - “役割” を分けて、同時に前に進めたい作業（例：設計/実装/テスト/レビュー）
-
-注意点（重要）：
-- teammateは lead の権限設定（permissions）を引き継ぎます。leadが危険な設定だとチーム全体が危険になります。
-- 並列化は速い反面、トークン消費が増えやすく、コストも上がりやすいです。
-
-参考（公式）：
-- Agent Teams: https://code.claude.com/docs/en/agent-teams
-
 ---
 
 ## 1. Subagents と Agent Teams の違い（混同しやすいポイント）
-### Agent Teams
-- “複数セッション” を並列に動かし、相互に連携して進める
-- 目的：並列化、役割分担、統合（leadがまとめる）
-- 向く：上流工程、クロスレイヤ協調、並列レビュー、改装計画など
+### Agent Teams（Agentとの相互連携可能）
+- 複数セッション を並列に動かし、相互に連携して進める
+- 割り込み可能（各チームメイトに個別に自然言語で指示を送れる）
+- 複数の役割が協調的に連携する複雑なタスクに強い。
 
-### Subagents
+### Subagents（連携はリーダのみと行う）
 - “単一セッション内” で専門役に委譲する（セッション自体は1つ）
-- 目的：特定タスクの委譲、コンテキスト節約、役割テンプレ化
-- 向く：単発の調査・要約・特定観点レビューをさっと投げたい時
 
 参考（公式）：
 - Subagents: https://code.claude.com/docs/en/sub-agents
@@ -42,31 +49,30 @@ Agent Teamsは、Claude Code上で “複数の作業セッション（teammates
 ---
 
 ## 2. 何に使える？（OCR実装自動化〜上流マネジメント）
-### 2.1 OCR（PIIを扱わない前提で）
-- 疑似データ（合成帳票）設計：ノイズ・崩れ・画質劣化の再現
-- 抽出スキーマ／正規化ルール／評価指標の設計
-- 回帰検知レポートのテンプレ化（失敗スライスTopN、改善/悪化の切り分け）
-- 速度も含めたベンチ設計（精度×スループット×運用コスト）
-
-### 2.2 上流工程（ブレスト／要件定義／設計）
+### 2.1 上流工程（ブレスト／要件定義／設計）
 - 論点出し（例外、非機能、運用、監査、SLO）
 - 要件の分解（確認事項リスト、前提、優先度、受け入れ条件）
 - 設計案A/B/C（メリデメ、移行、リスク、ロールバック）
 
-### 2.3 APIのフロント／バック協調
+### 2.2 APIのフロント／バック協調
 - OpenAPI / JSON Schema変更の影響分析
 - エラーモデル、互換性方針、段階移行の設計
 - フロント：型生成・モック・UI側の受け入れ条件整理
 - バック：段階リリース、後方互換、観測点の設計
 
-### 2.4 大規模改装（リファクタ／分割移行）
+### 2.3 大規模改装（リファクタ／分割移行）
 - 依存関係の棚卸し、移行順序、切り戻し条件
 - テスト戦略（回帰の焦点、スモーク、観測設計）
 - 変更面積を減らす切り方（段階導入、境界の再設計）
 
+### 2.4 OCR実装のOps化
+- 疑似データ（合成帳票）設計：ノイズ・崩れ・画質劣化の再現
+- 抽出スキーマ／正規化ルール／評価指標の設計
+- 結果レポートの自動出力、人間との協調サイクル
+
 ---
 
-## 3. デメリット（社内説明で押さえるべき点）
+## 3. デメリット
 ### 3.1 コストが増えやすい（並列＝トークン増）
 - teammatesを増やすほど、同時に会話・推論が走るためトークン消費が増えやすい
 - “並列化した結果、出力レビューの工数も増える” ことがある（統合が必要）
@@ -81,8 +87,8 @@ Agent Teamsは、Claude Code上で “複数の作業セッション（teammates
 
 ### 3.4 価格（高いと言われやすいポイント）
 - Team / Enterpriseは基本的に席課金（seat）になりやすく、上位プランは高額になりやすい
-- 最新の価格は必ず公式で確認（社内資料はリンクで逃がすのが安全）
-  - Pricing: https://claude.com/pricing
+Opus 4.6は
+
 
 ---
 
@@ -92,10 +98,8 @@ Agent Teamsは、Claude Code上で “複数の作業セッション（teammates
 - 利用条件・対応プランは公式で確認（Team/Enterpriseの扱い含む）
   - https://claude.com/pricing
 
-（ここは社内の端末標準、プロキシ、証明書、許可されたインストール方法に合わせて決める）
-
 ### 4.2 Agent Teams を有効化
-Agent Teamsは環境変数で有効化する方式が公式に記載されています。
+Agent Teamsは環境変数で有効化できる方式が公式に記載されています。
 
 例：ユーザー設定 `~/.claude/settings.json`
 ~~~json
@@ -106,19 +110,19 @@ Agent Teamsは環境変数で有効化する方式が公式に記載されてい
   "teammateMode": "auto"
 }
 ~~~
-
+詳しいことはLLMに聞いて設定するとよさそうです。
 参考（公式）：
 - Agent Teams: https://code.claude.com/docs/en/agent-teams
 - Settings（teammateMode等）: https://code.claude.com/docs/en/settings
 
 ---
 
-## 5. セキュリティ Best Practices（PIIは外部に出た時点でアウト）
+## 5. セキュリティ Best Practices
 ### 5.1 まず原則（最重要）
 - PIIをClaude Codeに入力しない（プロンプト、ファイル内容、ツール出力に含めない）
 - PIIが必要な作業は “閉域（社内）” で完結させ、Claude側には疑似データ or 集計値のみ渡す
 
-### 5.2 対策カテゴリ（sandboxing と 疑似データは別案）
+### 5.2 公式おすすめの対策
 - データ対策（入力を無害化）
   - 疑似データ（合成帳票）で開発・検証
   - 匿名化/マスク済みサンプル（復元不能）だけ共有
@@ -139,7 +143,7 @@ Agent Teamsは環境変数で有効化する方式が公式に記載されてい
 
 ---
 
-## 6. コピペ用：強制ポリシー（managed-settings.json）
+## 6. 強制ポリシーの実装例（managed-settings.json）
 目的：
 - ユーザーが勝手に権限を緩めない
 - PII/シークレットを読めない
@@ -152,7 +156,7 @@ Agent Teamsは環境変数で有効化する方式が公式に記載されてい
 - Windows: C:\Program Files\ClaudeCode\managed-settings.json
 参考：https://code.claude.com/docs/en/settings
 
-例（叩き台。社内ルールに合わせて調整）
+例（あくまで叩き台なので、ルールに合わせて調整が必要）
 ~~~json
 {
   "allowManagedPermissionRulesOnly": true,
@@ -209,7 +213,7 @@ Agent Teamsは環境変数で有効化する方式が公式に記載されてい
 
 ---
 
-## 7. コピペ用：sandboxing（任意だが強い）
+## 7. sandboxingについて
 狙い：
 - Bash実行の影響範囲を閉じ込める
 - ネットワーク到達先を絞る（WebFetchはOKでも “Bashで外へ投げる” を減らす）
@@ -237,8 +241,8 @@ Agent Teamsは環境変数で有効化する方式が公式に記載されてい
 
 ---
 
-## 8. コピペ用：MCP（拡張）を企業で統制する
-### 8.1 managed-mcp.json（固定セットのみ）
+## 8. MCP（拡張）の統制
+### 8.1 managed-mcp.json
 配置場所：
 - macOS: /Library/Application Support/ClaudeCode/managed-mcp.json
 - Linux/WSL: /etc/claude-code/managed-mcp.json
@@ -258,72 +262,9 @@ Agent Teamsは環境変数で有効化する方式が公式に記載されてい
 
 参考：
 - MCP: https://code.claude.com/docs/en/mcp
+--
 
----
-
-## 9. コピペ用：Hooks（実行前ゲート／任意）
-用途：
-- “外へ出しそうなコマンド” を追加で止める
-- うっかりを防ぐ最終防衛線（ただしこれだけに頼らない）
-
-`.claude/hooks/block-exfil.sh`
-~~~bash
-#!/bin/bash
-set -euo pipefail
-
-TOOL=$(jq -r '.tool_name')
-CMD=$(jq -r '.tool_input.command // empty')
-
-if [ "$TOOL" = "Bash" ]; then
-  if echo "$CMD" | grep -Eqi '\b(curl|wget|scp|rsync|nc|socat|ftp)\b'; then
-    jq -n '{
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "deny",
-        permissionDecisionReason: "Blocked: outbound network-like command (PII policy)."
-      }
-    }'
-    exit 0
-  fi
-fi
-
-exit 0
-~~~
-
-`.claude/settings.json`（プロジェクト設定に追加）
-~~~json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/block-exfil.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-~~~
-
-参考：
-- Hooks: https://code.claude.com/docs/en/hooks
-
----
-
-## 10. 会社紹介用：短い説明（そのまま貼れる）
-- Agent Teamsは、Claude Codeで複数の作業セッションを並列に動かし、上流工程や改装、API協調などを役割分担で速く進める仕組み。
-- Subagentsは単一セッション内の委譲で、軽いタスクや観点分離に向く。並列で相互連携させるならAgent Teams。
-- PIIが外部に出た時点でアウトの会社では、Claude CodeにPIIを渡さず、疑似データ・匿名化・集計値だけで回すのが前提。
-- 導入は「Managed設定で権限を強制」「MCPを許可制」「sandboxingとhooksで多重防御」「Plan承認とレビューゲート」の組み合わせが現実的。
-- デメリットはコスト（並列＝トークン増）と統制（権限・監査・運用ルール）の難しさ。価格は公式を参照： https://claude.com/pricing
-
----
-
-## 参考リンク（社内資料に貼る用）
+## 参考リンク
 - Agent Teams: https://code.claude.com/docs/en/agent-teams
 - Subagents: https://code.claude.com/docs/en/sub-agents
 - Permissions: https://code.claude.com/docs/en/permissions
