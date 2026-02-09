@@ -1,0 +1,123 @@
+ゴール】                                                                                                              
+  /work/hwdb_bench/subset_test_1k（CASIA-HWDB2-line test 1000件）でOCR評価をE2Eで回す。                                   
+  成果物として pred.jsonl / summary.json / REPORT.md を /work 配下に生成する。                                            
+  上司に報告するため、Agent Teamsの定量指標（速度・再実行・介入回数など）と実務ポイントもREPORTに含める。                 
+                                                                                                                          
+  【前提：Spot対策（S3なし）】                                                                                        
+  - Spotはいつ落ちてもおかしくない。重要ファイルは必ず /work 配下。                                                       
+  - 中断しても復旧できるよう、pred.jsonl は “逐次追記” して進捗を残す。                                                   
+  - 再実行時は既存pred.jsonlを読み、完了済みidをスキップして続きから回す。                                                
+                                                                                                                          
+  【現状】                                                                                                                
+  - /work/hwdb_bench/.venv は作成済み                                                                                     
+  - /work/hwdb_bench/subset_test_1k/gt.jsonl（1000行）と images/*.png が存在                                              
+  - 評価スクリプト：/work/hwdb_bench/eval_cer.py                                                                      
+                                                                                                                      
+  【チーム構成（in-process / 全員 Sonnet）】                                                                          
+  Ops / Runner / Analyst / Reporter / Improver の5人を作成。全員 Sonnet。                                             
+  （リードはまず Delegate mode（Shift+Tab）にして統括に専念）                                                         
+                                                                                                                      
+  【成果物（固定）】                                                                                                  
+  /work/hwdb_bench/subset_test_1k/                                                                                    
+    - pred.jsonl                                                                                                      
+    - summary.json                                                                                                    
+    - REPORT.md                                                                                                       
+    - logs/                                                                                                           
+                                                                                                                      
+  【pred.jsonl 形式（固定）】                                                                                         
+  1行1JSON：                                                                                                          
+  {"id":"000123","text":"...","latency_ms":12.3,"engine":"xxx","error":null}                                          
+  - error は失敗理由（例外/空文字など）                                                                               
+  - predは逐次追記し、50件ごとに fsync/flush 相当で安全に保存（実装で担保）                                           
+                                                                                                                      
+  【評価（固定）】                                                                                                    
+  python /work/hwdb_bench/eval_cer.py \                                                                               
+    --gt_jsonl /work/hwdb_bench/subset_test_1k/gt.jsonl \                                                             
+    --pred_jsonl /work/hwdb_bench/subset_test_1k/pred.jsonl \                                                         
+    --out_json /work/hwdb_bench/subset_test_1k/summary.json                                                           
+                                                                                                                      
+  【Improver（実装してOK）】                                                                                          
+  - Improverは勝手に実装してよい（承認不要）。                                                                        
+  - 推奨は Qwen3-VL 8B（ただし速度/VRAM/導入難度で変更OK）。                                                          
+  - 実装するたびに：                                                                                                  
+    1) 変更点要約                                                                                                     
+    2) ロールバック手順                                                                                               
+    3) 期待する改善（CER or latency）                                                                                 
+    を logs/CHANGELOG.md に追記。                                                                                     
+                                                                                                                      
+  【Reporter（上司向けに必須で書く内容）】                                                                            
+  REPORT.md に必ず以下を入れる：                                                                                      
+  - 実行開始/終了（UTC）と総時間                                                                                      
+  - OCRスループット（images/sec）                                                                                     
+  - 再実行回数、手動介入回数                                                                                          
+  - チーム人数と役割分割の効果（どこが並列で短縮されたか）                                                            
+  - コスト評価の“型”（厳密な$でなく、人数×ターン×試行回数×総時間 などの管理指標）                                     
+  - 実務で使えそうなポイント（Spot復旧性、再現性、改善ループが定量で回る 等）                                         
+                                                                                                                      
+  【最初の割当】                                                                                                      
+  Ops:                                                                                                                
+  - /work / データ / GPU(nvidia-smi) / 依存 を確認し logs/ を作る                                                     
+  - Spotで落ちた場合の復旧手順（3行）をREPORT冒頭案として作る                                                         
+  Runner:                                                                                                             
+  - まず100件で試走→OKなら1000件完走                                                                                  
+  - pred.jsonl逐次追記＋再開可能設計                                                                                  
+  Analyst:                                                                                                            
+  - summary.json生成、CER悪いTop20抽出、失敗理由の内訳                                                                
+  Reporter:                                                                                                           
+  - REPORT.md 作成（上司向けの定量指標と実務ポイント重視）                                                            
+  Improver:                                                                                                           
+  - 失敗スライスTopN→改善を実装→再評価（複数ラウンド可）                                                              
+
+
+
+Agent Teams に渡すプロンプトのコツ（ベストプラクティス）
+
+公式ドキュメントと、今回の仕組みの設計（共有タスクリスト＋メッセージ＋依存関係）に沿うと、効きやすいのはこの辺です。
+
+1) “タスクを割れる形”で書く
+
+Agent Teams は「独立・読み取り多めの並列タスク」に向く、と公式に書かれてます。
+だからプロンプトも、最初から
+
+Ops：環境・復旧
+
+Runner：実行・生成
+
+Analyst：集計
+
+Reporter：レポ
+
+Improver：改善
+みたいに 依存関係が薄い仕事に切って投げるのがコツです。
+
+2) “成果物のパス”と“フォーマット”を固定する
+
+共有タスクリストで並列になるほど、出力が散らばると破綻します。なので
+
+どこに
+
+何を
+
+どういう形式で
+を最初に固定。これは今のあなたのケースだと特に重要（Spot対策で /work 強制）です。
+
+3) リードを“実装させない”なら Delegate Mode
+
+「リードは統括だけ、実装はチームメイト」運用にしたい時は Delegate mode が公式に用意されています（Shift+Tab）。
+今回「Improver は勝手に実装してOK」でも、リードは統括・レビューに寄せた方が破綻しにくいです。
+
+4) コスト/暴走対策：broadcast を乱用しない
+
+全員へ一斉連絡（broadcast）は便利だけど、公式に「チームサイズに応じてコストが増える」と注意があります。
+→ 重要連絡だけ broadcast、普段は担当者に個別メッセ。
+
+5) “止まった時の復旧”を最初から書く
+
+公式にも「エラーでチームメイトが止まることがある。状況を見て指示するか、代替メンバーをspawnする」とあります。
+Spot環境ならなおさら、「predは逐次追記」「進捗ファイルを更新」「再実行時は既存predを読んでスキップ」みたいな再開前提設計をプロンプトに含めるのが効きます。
+
+6)（任意だけど強い）Hooks で品質ゲートを自動化
+
+Agent Teams には “TaskCompleted / TeammateIdle” フックで、タスク完了時にゲートを強制する仕組みが公式にあります。
+今回だと「pred.jsonl の行数が1000でなければ完了にさせない」みたいなルールを自動化できます（余裕が出たら）
+  以上。                                           
